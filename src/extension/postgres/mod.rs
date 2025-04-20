@@ -6,13 +6,11 @@ pub use select::*;
 pub use types::*;
 
 use crate::types::BinOper;
-
 pub(crate) mod expr;
 pub(crate) mod extension;
 pub(crate) mod func;
 pub(crate) mod interval;
 pub(crate) mod ltree;
-pub(crate) mod range;
 pub(crate) mod select;
 pub(crate) mod types;
 

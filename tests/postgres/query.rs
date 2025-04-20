@@ -2210,3 +2210,18 @@ fn test_pgvector_select() {
         r#"SELECT "character" FROM "character" WHERE "character" = '[1,2]'"#
     );
 }
+
+#[test]
+#[cfg(feature = "postgres-range")]
+fn test_pgrange_select() {
+    assert_eq!(
+        Query::select()
+            .columns([Char::Character])
+            .from(Char::Table)
+            .and_where(
+                Expr::col(Char::Character).eq(Expr::val(pgrange::PgRange::new(std::ops::Bound::Included(1), std::ops::Bound::Excluded(5))))
+            )
+            .to_string(PostgresQueryBuilder),
+        r#"SELECT "character" FROM "character" WHERE "character" = '[1,5)'"#
+    );
+}

@@ -31,8 +31,8 @@ use std::net::IpAddr;
 #[cfg(feature = "with-mac_address")]
 use mac_address::MacAddress;
 
-#[cfg(feature = "with-postgres-range")]
-use crate::extension::postgres::range::PgRange;
+#[cfg(feature = "postgres-range")]
+use pgrange::PgRange;
 
 use crate::{ColumnType, CommonSqlQueryBuilder, QueryBuilder, StringLen};
 
@@ -273,10 +273,6 @@ pub enum Value {
     #[cfg_attr(docsrs, doc(cfg(feature = "with-uuid")))]
     Uuid(Option<Box<Uuid>>),
 
-    #[cfg(all(feature = "with-postgres-range"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "with-postgres-range")))]
-    Range(RangeType, Option<Box<PgRange<Value>>>),
-
     #[cfg(feature = "with-rust_decimal")]
     #[cfg_attr(docsrs, doc(cfg(feature = "with-rust_decimal")))]
     Decimal(Option<Box<Decimal>>),
@@ -300,6 +296,10 @@ pub enum Value {
     #[cfg(feature = "with-mac_address")]
     #[cfg_attr(docsrs, doc(cfg(feature = "with-mac_address")))]
     MacAddress(Option<Box<MacAddress>>),
+
+    #[cfg(all(feature = "postgres-range"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "postgres-range")))]
+    Range(RangeType, Option<Box<PgRange<Value>>>),
 }
 
 impl std::fmt::Display for Value {
@@ -486,8 +486,8 @@ impl Value {
             #[cfg_attr(docsrs, doc(cfg(feature = "with-mac_address")))]
             Self::MacAddress(_) => Self::MacAddress(None),
 
-            #[cfg(feature = "with-postgres-range")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "with-postgres-range")))]
+            #[cfg(feature = "postgres-range")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "postgres-range")))]
             Self::Range(ty, _) => Self::Range(ty.clone(), None),
         }
     }
@@ -1148,45 +1148,92 @@ pub mod with_vector {
     }
 }
 
-#[cfg(feature = "with-postgres-range")]
-#[cfg_attr(docsrs, doc(cfg(feature = "with-postgres-range")))]
+#[cfg(feature = "postgres-range")]
+#[cfg_attr(docsrs, doc(cfg(feature = "postgres-range")))]
 pub mod with_postgres_range {
     use super::*;
     use crate::RcOrArc;
     use std::ops::Bound;
 
-    pub trait RangeCompatible {}
+    pub trait RangeCompatible {
+        fn is_range_compatible() -> bool {
+            false
+        }
+    }
 
-    impl RangeCompatible for i32 {}
-    impl RangeCompatible for i64 {}
+
+    impl RangeCompatible for i32 { fn is_range_compatible() -> bool {
+        true
+    }}
+    impl RangeCompatible for i64 { fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-bigdecimal")]
-    impl RangeCompatible for BigDecimal {}
+    impl RangeCompatible for BigDecimal { fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-rust_decimal")]
-    impl RangeCompatible for Decimal {}
+    impl RangeCompatible for Decimal { fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-chrono")]
-    impl RangeCompatible for NaiveDate {}
+    impl RangeCompatible for NaiveDate { fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-chrono")]
-    impl RangeCompatible for NaiveDateTime {}
+    impl RangeCompatible for NaiveDateTime { fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-chrono")]
-    impl<Tz> RangeCompatible for DateTime<Tz> where Tz: chrono::TimeZone {}
+    impl<Tz> RangeCompatible for DateTime<Tz> where Tz: chrono::TimeZone { fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-time")]
-    impl RangeCompatible for time::Date {}
+    impl RangeCompatible for time::Date {fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-time")]
-    impl RangeCompatible for PrimitiveDateTime {}
+    impl RangeCompatible for PrimitiveDateTime { fn is_range_compatible() -> bool {
+        true
+    }}
 
     #[cfg(feature = "with-time")]
-    impl RangeCompatible for OffsetDateTime {}
+    impl RangeCompatible for OffsetDateTime { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    impl RangeCompatible for bool { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for i8 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for i16 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u8 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for String { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u16 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u64 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u32 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for f32 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for f64 { fn is_range_compatible() -> bool { false } }
+
+    #[cfg(feature = "with-chrono")]
+    impl RangeCompatible for chrono::NaiveTime {fn is_range_compatible() -> bool {
+        false
+    }}
+
+    #[cfg(feature = "with-time")]
+    impl RangeCompatible for time::Time {fn is_range_compatible() -> bool {
+        false
+    }}
+
 
     impl<T> From<PgRange<T>> for Value
     where
-        T: Into<Value> + RangeCompatible + ValueType + std::fmt::Display,
+        T: Into<Value> + ValueType + std::fmt::Display,
     {
         fn from(x: PgRange<T>) -> Value {
             Value::Range(
@@ -1209,7 +1256,7 @@ pub mod with_postgres_range {
 
     impl<T> Nullable for PgRange<T>
     where
-        T: Into<Value> + RangeCompatible + ValueType,
+        T: Into<Value> + ValueType,
     {
         fn null() -> Value {
             Value::Range(T::range_type(), None)
@@ -1218,11 +1265,11 @@ pub mod with_postgres_range {
 
     impl<T> ValueType for PgRange<T>
     where
-        T: RangeCompatible + ValueType,
+        T: ValueType + RangeCompatible,
     {
         fn try_from(v: Value) -> Result<Self, ValueTypeErr> {
             match v {
-                Value::Range(ty, Some(boxed_inner_range)) if T::range_type() == ty => {
+                Value::Range(ty, Some(boxed_inner_range)) if T::range_type() == ty && T::is_range_compatible()  => {
                     let PgRange { start, end } = *boxed_inner_range;
 
                     Ok(PgRange {
@@ -1243,7 +1290,21 @@ pub mod with_postgres_range {
         }
 
         fn type_name() -> String {
-            stringify!(PgRange<T>).to_owned()
+            match T::range_type() {
+                RangeType::Int => "int4range".to_string(),
+                RangeType::BigInt => "int8range".to_string(),
+                RangeType::Decimal => "numrange".to_string(),
+                RangeType::BigDecimal => "numrange".to_string(),
+                RangeType::ChronoDate => "daterange".to_string(),
+                RangeType::ChronoDateTime => "tsrange".to_string(),
+                RangeType::ChronoDateTimeUtc => "tstzrange".to_string(),
+                RangeType::ChronoDateTimeLocal => "tstzrange".to_string(),
+                RangeType::ChronoDateTimeWithTimeZone => "tstzrange".to_string(),
+                RangeType::TimeDate => "daterange".to_string(),
+                RangeType::TimeDateTime => "tsrange".to_string(),
+                RangeType::TimeDateTimeWithTimeZone => "tstzrange".to_string(),
+                _ => panic!("not compatible Value"),
+            }
         }
 
         fn range_type() -> RangeType {
@@ -1528,6 +1589,20 @@ impl Value {
     }
 }
 
+#[cfg(feature = "postgres-range")]
+impl Value {
+    pub fn is_range(&self) -> bool {
+        matches!(self, Self::Range(_, _))
+    }
+
+    pub fn as_ref_range(&self) -> Option<&PgRange<Value>> {
+        match self {
+            Self::Range(_, v) => box_to_opt_ref!(v),
+            _ => panic!("not Value::Range"),
+        }
+    }
+}
+
 #[cfg(feature = "with-ipnetwork")]
 impl Value {
     pub fn is_ipnetwork(&self) -> bool {
@@ -1765,7 +1840,7 @@ pub fn sea_value_to_json_value(value: &Value) -> Json {
         Value::IpNetwork(None) => Json::Null,
         #[cfg(feature = "with-mac_address")]
         Value::MacAddress(None) => Json::Null,
-        #[cfg(feature = "with-postgres-range")]
+        #[cfg(feature = "postgres-range")]
         Value::Range(_, None) => Json::Null,
         Value::Bool(Some(b)) => Json::Bool(*b),
         Value::TinyInt(Some(v)) => (*v).into(),
@@ -1814,8 +1889,11 @@ pub fn sea_value_to_json_value(value: &Value) -> Json {
         }
         #[cfg(feature = "with-uuid")]
         Value::Uuid(Some(v)) => Json::String(v.to_string()),
-        #[cfg(feature = "with-postgres-range")]
-        Value::Range(_, Some(_)) => CommonSqlQueryBuilder.value_to_string(value).into(),
+        #[cfg(feature = "postgres-range")]
+        Value::Range(_, Some(boxed_range)) => {
+            let range_str = boxed_range.to_string();
+            Json::String(range_str)
+        },
         #[cfg(feature = "postgres-array")]
         Value::Array(_, Some(v)) => {
             Json::Array(v.as_ref().iter().map(sea_value_to_json_value).collect())
@@ -2098,7 +2176,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "with-chrono", feature = "with-postgres-range"))]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
     fn test_chrono_date_range_value() {
         use chrono::Days;
 
@@ -2132,7 +2210,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "with-chrono", feature = "with-postgres-range"))]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
     fn test_chrono_utc_range_value() {
         use chrono::Days;
 
@@ -2172,7 +2250,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "with-chrono", feature = "with-postgres-range"))]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
     fn test_chrono_local_range_value() {
         use chrono::Days;
 
@@ -2231,7 +2309,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "with-chrono", feature = "with-postgres-range"))]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
     fn test_chrono_range_query() {
         use chrono::Days;
         use crate::*;
@@ -2272,7 +2350,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "with-time", feature = "with-postgres-range"))]
+    #[cfg(all(feature = "with-time", feature = "postgres-range"))]
     fn test_time_date_range_value() {
         use time::macros::date;
         use time::Date;
@@ -2301,7 +2379,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "with-time", feature = "with-postgres-range"))]
+    #[cfg(all(feature = "with-time", feature = "postgres-range"))]
     fn test_time_utc_range_value() {
         use time::macros::{date, time};
         use time::Duration;
@@ -2367,7 +2445,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "with-time", feature = "with-postgres-range"))]
+    #[cfg(all(feature = "with-time", feature = "postgres-range"))]
     fn test_time_range_query() {
         use crate::*;
         use time::{macros::datetime, Duration};
@@ -2518,7 +2596,7 @@ mod hashable_value {
                 #[cfg(feature = "with-bigdecimal")]
                 (Self::BigDecimal(l), Self::BigDecimal(r)) => l == r,
 
-                #[cfg(feature = "with-postgres-range")]
+                #[cfg(feature = "postgres-range")]
                 (Self::Range(ty_l, values_l), Self::Range(ty_r, values_r)) => {
                     ty_l == ty_r && values_l == values_r
                 }
@@ -2597,7 +2675,7 @@ mod hashable_value {
                 #[cfg(feature = "with-bigdecimal")]
                 Value::BigDecimal(big_decimal) => big_decimal.hash(state),
 
-                #[cfg(feature = "with-postgres-range")]
+                #[cfg(feature = "postgres-range")]
                 Value::Range(range_type, range) => {
                     range_type.hash(state);
                     range.hash(state);

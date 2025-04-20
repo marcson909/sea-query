@@ -114,8 +114,14 @@ impl ToSql for PostgresValue {
                 .map(|v| PostgresValue(v.clone()))
                 .collect::<Vec<PostgresValue>>()
                 .to_sql(ty, out),
+            #[cfg(feature = "postgres-range")]
+            Value::Range(_, Some(v)) => {
+                v.as_deref().to_sql(ty, out)
+            },
             #[cfg(feature = "postgres-array")]
             Value::Array(_, None) => Ok(IsNull::Yes),
+            #[cfg(feature = "postgres-range")]
+            Value::Range(_, None) => Ok(IsNull::No),
             #[cfg(feature = "postgres-vector")]
             Value::Vector(Some(v)) => v.to_sql(ty, out),
             #[cfg(feature = "postgres-vector")]
