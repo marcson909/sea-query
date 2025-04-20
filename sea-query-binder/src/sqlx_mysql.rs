@@ -122,6 +122,10 @@ impl sqlx::IntoArguments<'_, sqlx::mysql::MySql> for SqlxValues {
                 Value::MacAddress(_) => {
                     panic!("Mysql doesn't support MacAddress arguments");
                 }
+                #[cfg(feature = "postgres-range")]
+                Value::Range(_, _) => {
+                    panic!("Range not impl for Mysql");
+                }
             }
         }
         args

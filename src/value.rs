@@ -31,8 +31,91 @@ use std::net::IpAddr;
 #[cfg(feature = "with-mac_address")]
 use mac_address::MacAddress;
 
+#[cfg(feature = "postgres-range")]
+use pgrange::PgRange;
+
 use crate::{ColumnType, CommonSqlQueryBuilder, QueryBuilder, StringLen};
 
+/// [`Value`] types variant for Postgres range
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum RangeType {
+    Bool,
+    TinyInt,
+    SmallInt,
+    Int,
+    BigInt,
+    TinyUnsigned,
+    SmallUnsigned,
+    Unsigned,
+    BigUnsigned,
+    Float,
+    Double,
+    String,
+    Char,
+    Bytes,
+    #[cfg(feature = "with-json")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-json")))]
+    Json,
+
+    #[cfg(feature = "with-chrono")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
+    ChronoDate,
+
+    #[cfg(feature = "with-chrono")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
+    ChronoTime,
+
+    #[cfg(feature = "with-chrono")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
+    ChronoDateTime,
+
+    #[cfg(feature = "with-chrono")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
+    ChronoDateTimeUtc,
+
+    #[cfg(feature = "with-chrono")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
+    ChronoDateTimeLocal,
+
+    #[cfg(feature = "with-chrono")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-chrono")))]
+    ChronoDateTimeWithTimeZone,
+
+    #[cfg(feature = "with-time")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-time")))]
+    TimeDate,
+
+    #[cfg(feature = "with-time")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-time")))]
+    TimeTime,
+
+    #[cfg(feature = "with-time")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-time")))]
+    TimeDateTime,
+
+    #[cfg(feature = "with-time")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-time")))]
+    TimeDateTimeWithTimeZone,
+
+    #[cfg(feature = "with-uuid")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-uuid")))]
+    Uuid,
+
+    #[cfg(feature = "with-rust_decimal")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-rust_decimal")))]
+    Decimal,
+
+    #[cfg(feature = "with-bigdecimal")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-bigdecimal")))]
+    BigDecimal,
+    #[cfg(feature = "with-ipnetwork")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-ipnetwork")))]
+    IpNetwork,
+
+    #[cfg(feature = "with-mac_address")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "with-mac_address")))]
+    MacAddress,
+}
 /// [`Value`] types variant for Postgres array
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ArrayType {
@@ -213,6 +296,10 @@ pub enum Value {
     #[cfg(feature = "with-mac_address")]
     #[cfg_attr(docsrs, doc(cfg(feature = "with-mac_address")))]
     MacAddress(Option<Box<MacAddress>>),
+
+    #[cfg(all(feature = "postgres-range"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "postgres-range")))]
+    Range(RangeType, Option<Box<PgRange<Value>>>),
 }
 
 impl std::fmt::Display for Value {
@@ -235,6 +322,8 @@ pub trait ValueType: Sized {
     fn type_name() -> String;
 
     fn array_type() -> ArrayType;
+
+    fn range_type() -> RangeType;
 
     fn column_type() -> ColumnType;
 
@@ -396,6 +485,10 @@ impl Value {
             #[cfg(feature = "with-mac_address")]
             #[cfg_attr(docsrs, doc(cfg(feature = "with-mac_address")))]
             Self::MacAddress(_) => Self::MacAddress(None),
+
+            #[cfg(feature = "postgres-range")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "postgres-range")))]
+            Self::Range(ty, _) => Self::Range(ty.clone(), None),
         }
     }
 }
@@ -424,6 +517,10 @@ macro_rules! type_to_value {
 
             fn type_name() -> String {
                 stringify!($type).to_owned()
+            }
+
+            fn range_type() -> RangeType {
+                RangeType::$name
             }
 
             fn array_type() -> ArrayType {
@@ -462,6 +559,10 @@ macro_rules! type_to_box_value {
 
             fn type_name() -> String {
                 stringify!($type).to_owned()
+            }
+
+            fn range_type() -> RangeType {
+                RangeType::$name
             }
 
             fn array_type() -> ArrayType {
@@ -547,6 +648,10 @@ where
         T::array_type()
     }
 
+    fn range_type() -> RangeType {
+        T::range_type()
+    }
+
     fn column_type() -> ColumnType {
         T::column_type()
     }
@@ -568,6 +673,10 @@ impl ValueType for Cow<'_, str> {
 
     fn type_name() -> String {
         "Cow<str>".into()
+    }
+
+    fn range_type() -> RangeType {
+        RangeType::String
     }
 
     fn array_type() -> ArrayType {
@@ -642,6 +751,10 @@ mod with_chrono {
             ArrayType::ChronoDateTimeUtc
         }
 
+        fn range_type() -> RangeType {
+            RangeType::ChronoDateTimeUtc
+        }
+
         fn column_type() -> ColumnType {
             ColumnType::TimestampWithTimeZone
         }
@@ -669,6 +782,10 @@ mod with_chrono {
             ArrayType::ChronoDateTimeLocal
         }
 
+        fn range_type() -> RangeType {
+            RangeType::ChronoDateTimeLocal
+        }
+
         fn column_type() -> ColumnType {
             ColumnType::TimestampWithTimeZone
         }
@@ -694,6 +811,10 @@ mod with_chrono {
 
         fn array_type() -> ArrayType {
             ArrayType::ChronoDateTimeWithTimeZone
+        }
+
+        fn range_type() -> RangeType {
+            RangeType::ChronoDateTimeWithTimeZone
         }
 
         fn column_type() -> ColumnType {
@@ -749,6 +870,10 @@ mod with_time {
 
         fn type_name() -> String {
             stringify!(OffsetDateTime).to_owned()
+        }
+
+        fn range_type() -> RangeType {
+            RangeType::TimeDateTimeWithTimeZone
         }
 
         fn array_type() -> ArrayType {
@@ -808,6 +933,10 @@ mod with_uuid {
 
                 fn type_name() -> String {
                     stringify!($type).to_owned()
+                }
+
+                fn range_type() -> RangeType {
+                    RangeType::Uuid
                 }
 
                 fn array_type() -> ArrayType {
@@ -962,6 +1091,9 @@ pub mod with_array {
             stringify!(Vec<T>).to_owned()
         }
 
+        fn range_type() -> RangeType {
+            T::range_type()
+        }
         fn array_type() -> ArrayType {
             T::array_type()
         }
@@ -1002,12 +1134,189 @@ pub mod with_vector {
             stringify!(Vector).to_owned()
         }
 
+        fn range_type() -> RangeType {
+            unimplemented!("Vector does not have range type")
+        }
+
         fn array_type() -> ArrayType {
             unimplemented!("Vector does not have array type")
         }
 
         fn column_type() -> ColumnType {
             ColumnType::Vector(None)
+        }
+    }
+}
+
+#[cfg(feature = "postgres-range")]
+#[cfg_attr(docsrs, doc(cfg(feature = "postgres-range")))]
+pub mod with_postgres_range {
+    use super::*;
+    use crate::RcOrArc;
+    use std::ops::Bound;
+
+    pub trait RangeCompatible {
+        fn is_range_compatible() -> bool {
+            false
+        }
+    }
+
+
+    impl RangeCompatible for i32 { fn is_range_compatible() -> bool {
+        true
+    }}
+    impl RangeCompatible for i64 { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-bigdecimal")]
+    impl RangeCompatible for BigDecimal { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-rust_decimal")]
+    impl RangeCompatible for Decimal { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-chrono")]
+    impl RangeCompatible for NaiveDate { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-chrono")]
+    impl RangeCompatible for NaiveDateTime { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-chrono")]
+    impl<Tz> RangeCompatible for DateTime<Tz> where Tz: chrono::TimeZone { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-time")]
+    impl RangeCompatible for time::Date {fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-time")]
+    impl RangeCompatible for PrimitiveDateTime { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    #[cfg(feature = "with-time")]
+    impl RangeCompatible for OffsetDateTime { fn is_range_compatible() -> bool {
+        true
+    }}
+
+    impl RangeCompatible for bool { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for i8 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for i16 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u8 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for String { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u16 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u64 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for u32 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for f32 { fn is_range_compatible() -> bool { false } }
+    impl RangeCompatible for f64 { fn is_range_compatible() -> bool { false } }
+
+    #[cfg(feature = "with-chrono")]
+    impl RangeCompatible for chrono::NaiveTime {fn is_range_compatible() -> bool {
+        false
+    }}
+
+    #[cfg(feature = "with-time")]
+    impl RangeCompatible for time::Time {fn is_range_compatible() -> bool {
+        false
+    }}
+
+
+    impl<T> From<PgRange<T>> for Value
+    where
+        T: Into<Value> + ValueType + std::fmt::Display,
+    {
+        fn from(x: PgRange<T>) -> Value {
+            Value::Range(
+                T::range_type(),
+                Some(Box::new(PgRange {
+                    start: match x.start {
+                        Bound::Included(inner) => Bound::Included(inner.into()),
+                        Bound::Excluded(inner) => Bound::Excluded(inner.into()),
+                        Bound::Unbounded => Bound::Unbounded,
+                    },
+                    end: match x.end {
+                        Bound::Included(inner) => Bound::Included(inner.into()),
+                        Bound::Excluded(inner) => Bound::Excluded(inner.into()),
+                        Bound::Unbounded => Bound::Unbounded,
+                    },
+                })),
+            )
+        }
+    }
+
+    impl<T> Nullable for PgRange<T>
+    where
+        T: Into<Value> + ValueType,
+    {
+        fn null() -> Value {
+            Value::Range(T::range_type(), None)
+        }
+    }
+
+    impl<T> ValueType for PgRange<T>
+    where
+        T: ValueType + RangeCompatible,
+    {
+        fn try_from(v: Value) -> Result<Self, ValueTypeErr> {
+            match v {
+                Value::Range(ty, Some(boxed_inner_range)) if T::range_type() == ty && T::is_range_compatible()  => {
+                    let PgRange { start, end } = *boxed_inner_range;
+
+                    Ok(PgRange {
+                        start: match start {
+                            Bound::Included(inner) => Bound::Included(T::try_from(inner)?),
+                            Bound::Excluded(inner) => Bound::Excluded(T::try_from(inner)?),
+                            Bound::Unbounded => Bound::Unbounded,
+                        },
+                        end: match end {
+                            Bound::Included(inner) => Bound::Included(T::try_from(inner)?),
+                            Bound::Excluded(inner) => Bound::Excluded(T::try_from(inner)?),
+                            Bound::Unbounded => Bound::Unbounded,
+                        },
+                    })
+                }
+                _ => Err(ValueTypeErr),
+            }
+        }
+
+        fn type_name() -> String {
+            match T::range_type() {
+                RangeType::Int => "int4range".to_string(),
+                RangeType::BigInt => "int8range".to_string(),
+                RangeType::Decimal => "numrange".to_string(),
+                RangeType::BigDecimal => "numrange".to_string(),
+                RangeType::ChronoDate => "daterange".to_string(),
+                RangeType::ChronoDateTime => "tsrange".to_string(),
+                RangeType::ChronoDateTimeUtc => "tstzrange".to_string(),
+                RangeType::ChronoDateTimeLocal => "tstzrange".to_string(),
+                RangeType::ChronoDateTimeWithTimeZone => "tstzrange".to_string(),
+                RangeType::TimeDate => "daterange".to_string(),
+                RangeType::TimeDateTime => "tsrange".to_string(),
+                RangeType::TimeDateTimeWithTimeZone => "tstzrange".to_string(),
+                _ => panic!("not compatible Value"),
+            }
+        }
+
+        fn range_type() -> RangeType {
+            T::range_type()
+        }
+
+        fn array_type() -> ArrayType {
+            T::array_type()
+        }
+
+        fn column_type() -> ColumnType {
+            ColumnType::Range(RcOrArc::new(T::column_type()))
         }
     }
 }
@@ -1280,6 +1589,20 @@ impl Value {
     }
 }
 
+#[cfg(feature = "postgres-range")]
+impl Value {
+    pub fn is_range(&self) -> bool {
+        matches!(self, Self::Range(_, _))
+    }
+
+    pub fn as_ref_range(&self) -> Option<&PgRange<Value>> {
+        match self {
+            Self::Range(_, v) => box_to_opt_ref!(v),
+            _ => panic!("not Value::Range"),
+        }
+    }
+}
+
 #[cfg(feature = "with-ipnetwork")]
 impl Value {
     pub fn is_ipnetwork(&self) -> bool {
@@ -1517,6 +1840,8 @@ pub fn sea_value_to_json_value(value: &Value) -> Json {
         Value::IpNetwork(None) => Json::Null,
         #[cfg(feature = "with-mac_address")]
         Value::MacAddress(None) => Json::Null,
+        #[cfg(feature = "postgres-range")]
+        Value::Range(_, None) => Json::Null,
         Value::Bool(Some(b)) => Json::Bool(*b),
         Value::TinyInt(Some(v)) => (*v).into(),
         Value::SmallInt(Some(v)) => (*v).into(),
@@ -1564,6 +1889,11 @@ pub fn sea_value_to_json_value(value: &Value) -> Json {
         }
         #[cfg(feature = "with-uuid")]
         Value::Uuid(Some(v)) => Json::String(v.to_string()),
+        #[cfg(feature = "postgres-range")]
+        Value::Range(_, Some(boxed_range)) => {
+            let range_str = boxed_range.to_string();
+            Json::String(range_str)
+        },
         #[cfg(feature = "postgres-array")]
         Value::Array(_, Some(v)) => {
             Json::Array(v.as_ref().iter().map(sea_value_to_json_value).collect())
@@ -1846,6 +2176,25 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
+    fn test_chrono_date_range_value() {
+        use chrono::Days;
+
+        let date = NaiveDate::from_ymd_opt(2020, 1, 1)
+            .unwrap();
+
+        let later = date.checked_add_days(Days::new(1)).unwrap();
+        let range = PgRange {
+            start: std::ops::Bound::Included(date),
+            end: std::ops::Bound::Excluded(later),
+        };
+
+        let value: Value = range.into();
+        let out: PgRange<NaiveDate> = value.unwrap();
+        assert_eq!(out, range);
+    }
+
+    #[test]
     #[cfg(feature = "with-chrono")]
     fn test_chrono_utc_value() {
         let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(
@@ -1858,6 +2207,30 @@ mod tests {
         let value: Value = timestamp.into();
         let out: DateTime<Utc> = value.unwrap();
         assert_eq!(out, timestamp);
+    }
+
+    #[test]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
+    fn test_chrono_utc_range_value() {
+        use chrono::Days;
+
+        let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(2022, 1, 2)
+                .unwrap()
+                .and_hms_opt(3, 4, 5)
+                .unwrap(),
+            Utc,
+        );
+
+        let later = timestamp.checked_add_days(Days::new(1)).unwrap();
+        let range = PgRange {
+            start: std::ops::Bound::Included(timestamp),
+            end: std::ops::Bound::Excluded(later),
+        };
+
+        let value: Value = range.into();
+        let out: PgRange<DateTime<Utc>> = value.unwrap();
+        assert_eq!(out, range);
     }
 
     #[test]
@@ -1874,6 +2247,30 @@ mod tests {
         let value: Value = timestamp_local.into();
         let out: DateTime<Local> = value.unwrap();
         assert_eq!(out, timestamp_local);
+    }
+
+    #[test]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
+    fn test_chrono_local_range_value() {
+        use chrono::Days;
+
+        let timestamp_utc = DateTime::<Utc>::from_naive_utc_and_offset(
+            NaiveDate::from_ymd_opt(2022, 1, 2)
+                .unwrap()
+                .and_hms_opt(3, 4, 5)
+                .unwrap(),
+            Utc,
+        );
+        let timestamp_local: DateTime<Local> = timestamp_utc.into();
+        let later = timestamp_local.checked_add_days(Days::new(1)).unwrap();
+        let range = PgRange {
+            start: std::ops::Bound::Included(timestamp_local),
+            end: std::ops::Bound::Excluded(later),
+        };
+
+        let value: Value = range.into();
+        let out: PgRange<DateTime<Local>> = value.unwrap();
+        assert_eq!(out, range);
     }
 
     #[test]
@@ -1912,6 +2309,37 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(feature = "with-chrono", feature = "postgres-range"))]
+    fn test_chrono_range_query() {
+        use chrono::Days;
+        use crate::*;
+
+        let string = "2020-01-01T02:02:02+08:00";
+        let timestamp = DateTime::parse_from_rfc3339(string).unwrap();
+        let later = timestamp.checked_add_days(Days::new(1)).unwrap();
+        let range = PgRange {
+            start: std::ops::Bound::Included(timestamp),
+            end: std::ops::Bound::Excluded(later),
+        };
+        let query = Query::select().expr(range).to_owned();
+
+        let formatted = "[2020-01-01 02:02:02 +08:00,2020-01-02 02:02:02 +08:00)";
+
+        assert_eq!(
+            query.to_string(MysqlQueryBuilder),
+            format!("SELECT '{formatted}'")
+        );
+        assert_eq!(
+            query.to_string(PostgresQueryBuilder),
+            format!("SELECT '{formatted}'")
+        );
+        assert_eq!(
+            query.to_string(SqliteQueryBuilder),
+            format!("SELECT '{formatted}'")
+        );
+    }
+
+    #[test]
     #[cfg(feature = "with-time")]
     fn test_time_value() {
         use time::macros::{date, time};
@@ -1922,6 +2350,25 @@ mod tests {
     }
 
     #[test]
+    #[cfg(all(feature = "with-time", feature = "postgres-range"))]
+    fn test_time_date_range_value() {
+        use time::macros::date;
+        use time::Date;
+
+        let date = date!(2020 - 01 - 01);
+
+        let later = date.next_day().unwrap();
+        let range = PgRange {
+            start: std::ops::Bound::Included(date),
+            end: std::ops::Bound::Excluded(later),
+        };
+
+        let value: Value = range.into();
+        let out: PgRange<Date> = value.unwrap();
+        assert_eq!(out, range);
+    }
+
+    #[test]
     #[cfg(feature = "with-time")]
     fn test_time_utc_value() {
         use time::macros::{date, time};
@@ -1929,6 +2376,25 @@ mod tests {
         let value: Value = timestamp.into();
         let out: OffsetDateTime = value.unwrap();
         assert_eq!(out, timestamp);
+    }
+
+    #[test]
+    #[cfg(all(feature = "with-time", feature = "postgres-range"))]
+    fn test_time_utc_range_value() {
+        use time::macros::{date, time};
+        use time::Duration;
+
+        let timestamp = date!(2022 - 01 - 02).with_time(time!(3:04:05)).assume_utc();
+
+        let later = timestamp.checked_add(Duration::days(1)).unwrap();
+        let range = PgRange {
+            start: std::ops::Bound::Included(timestamp),
+            end: std::ops::Bound::Excluded(later),
+        };
+
+        let value: Value = range.into();
+        let out: PgRange<OffsetDateTime> = value.unwrap();
+        assert_eq!(out, range);
     }
 
     #[test]
@@ -1963,6 +2429,36 @@ mod tests {
         let timestamp = datetime!(2020-01-01 02:02:02 +8);
         let query = Query::select().expr(timestamp).to_owned();
         let formatted = "2020-01-01 02:02:02.000000 +08:00";
+
+        assert_eq!(
+            query.to_string(MysqlQueryBuilder),
+            format!("SELECT '{formatted}'")
+        );
+        assert_eq!(
+            query.to_string(PostgresQueryBuilder),
+            format!("SELECT '{formatted}'")
+        );
+        assert_eq!(
+            query.to_string(SqliteQueryBuilder),
+            format!("SELECT '{formatted}'")
+        );
+    }
+
+    #[test]
+    #[cfg(all(feature = "with-time", feature = "postgres-range"))]
+    fn test_time_range_query() {
+        use crate::*;
+        use time::{macros::datetime, Duration};
+
+        let timestamp = datetime!(2020-01-01 02:02:02 +8);
+        let later = timestamp.checked_add(Duration::days(1)).unwrap();
+        let range = PgRange {
+            start: std::ops::Bound::Included(timestamp),
+            end: std::ops::Bound::Excluded(later),
+        };
+        let query = Query::select().expr(range).to_owned();
+
+        let formatted = "[2020-01-01 02:02:02.000000 +08:00,2020-01-02 02:02:02.000000 +08:00)";
 
         assert_eq!(
             query.to_string(MysqlQueryBuilder),
@@ -2100,6 +2596,11 @@ mod hashable_value {
                 #[cfg(feature = "with-bigdecimal")]
                 (Self::BigDecimal(l), Self::BigDecimal(r)) => l == r,
 
+                #[cfg(feature = "postgres-range")]
+                (Self::Range(ty_l, values_l), Self::Range(ty_r, values_r)) => {
+                    ty_l == ty_r && values_l == values_r
+                }
+
                 #[cfg(feature = "postgres-array")]
                 (Self::Array(ty_l, values_l), Self::Array(ty_r, values_r)) => {
                     ty_l == ty_r && values_l == values_r
@@ -2173,6 +2674,12 @@ mod hashable_value {
 
                 #[cfg(feature = "with-bigdecimal")]
                 Value::BigDecimal(big_decimal) => big_decimal.hash(state),
+
+                #[cfg(feature = "postgres-range")]
+                Value::Range(range_type, range) => {
+                    range_type.hash(state);
+                    range.hash(state);
+                }
 
                 #[cfg(feature = "postgres-array")]
                 Value::Array(array_type, vec) => {
