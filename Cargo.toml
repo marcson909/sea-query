@@ -53,7 +53,7 @@ pretty_assertions = { version = "1" }
 backend-mysql = []
 backend-postgres = []
 backend-sqlite = []
-default = ["derive", "backend-mysql", "backend-postgres", "backend-sqlite", "all-features", "postgres-range"]
+default = ["derive", "backend-mysql", "backend-postgres", "backend-sqlite"]
 derive = ["sea-query-derive"]
 attr = ["sea-query-derive"]
 hashable-value = ["ordered-float"]
